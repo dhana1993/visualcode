@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+               checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '*/staging_TechStack_WildflyJBOSS']], extensions: [], userRemoteConfigs: [[credentialsId: 'GitlabAdmin', url: 'https://sourcecode.religarehealthinsurance.com/monocept/propero/properov2/properov2.git']]]
+            }
+        }        
+        stage('Code Quality Check via SonarQube') {
+            steps {
+                script {
+                    def scannerHome = tool 'Sonarqube_scanner';
+                    withSonarQubeEnv("SonarqubeScanner") {
+                    sh ''' /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/Sonarqube_scanner/bin/sonar-scanner \
+                        -Dsonar.projectKey= PROPERO-dhana \
+                        -Dsonar.projectName= PROPERO-dhana \
+                        -Dsonar.projectVersion=1.0 \
+                        -Dsonar.sources=${WORKSPACE}/Religare/Source \
+                        -Dsonar.module=module1 \
+                        #Propero 
+                        -Dmodule1.sonar.projectName=${WORKSPACE}/Religare/Source \ 
+
+                        -Dsonar.scanner.app=ScannerCli \
+                        -Dsonar.sourceEncoding=UTF-8 \
+                        -Dsonar.verbose=true \
+                        -Dsonar.log.level=DEBUG \
+                        #-Dsonar.language=php \
+                        -Dsonar.ce.javaOpts=-Xmx5123m \
+                        -Dsonar.exclusions=**/*.java, , **/*.JAVA, , **/*.git, , **/*.doc, , **/*.docx, , **/*.xlsx, , **/*.xls, , **/*.pdf	
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Generating pdf repot'){
+            stepts{
+                script{
+                  
+                   sh '''
+                    #!/bin/bash
+                    path=/home/devops
+                    
+                    if [ ! -d "$path/$JOB_NAME" ]; then
+                    sudo mkdir "$path/$JOB_NAME"
+                    cd
+                    cd "$path/$JOB_NAME"
+                    sudo mkdir "archive"
+                    fi
+
+                    cd '$path/sonar_report_generator/Sonar-Reporter'
+                    #source /venv/bin/activate
+
+                   #pip3 install weasyprint
+                    #pip3 install pytz
+                    #pip3 install python-dateutil
+                    #pip3 install bs4
+
+                    echo $JOB_NAME
+                    sudo python3 sonar_reporter.py https://sonarqube.religarehealthinsurance.com:9000 $sonarqube_username $sonarqube_password $JOB_NAME
+                    echo "Report Generated..................!!!"
+                    echo "moving report to workspace !!!"
+                    sudo mkdir /var/lib/jenkins/workspace/$JOB_NAME/pdf_reports
+                    cd /var/lib/jenkins/workspace/$JOB_NAME
+                    sudo chown jenkins:jenkins pdf_reports/
+                    cd pdf_reports/
+                    sudo rm *.pdf
+                    sudo rm *.txt
+                    cd
+                    sudo mv $path/$JOB_NAME/*.pdf /var/lib/jenkins/workspace/$JOB_NAME/pdf_reports/
+                    sudo mv $path/$JOB_NAME/*.txt /var/lib/jenkins/workspace/$JOB_NAME/pdf_reports/
+                    
+                    '''
+
+                }
+            }
+        }
+    }
+  
+  
+ /*post {
+   always{
+    script {
+            
+            emailext attachmentsPattern: 'pdf_reports/*.txt , pdf_reports/*.pdf ', 
+            body: 'Hi \n Find the sonarqube attachment ', 
+            subject: 'Sonarqube Report', 
+            to: 'lakshmi.balanagu9602@gmail.com'
+            
+         }
+      }
+  
+   } */
+
+}
